@@ -10,7 +10,7 @@ include(FetchContent)
 FetchContent_Declare(
     JUCE
     GIT_REPOSITORY https://github.com/juce-framework/JUCE.git
-    GIT_TAG        7.0.9
+    GIT_TAG        8.0.4
     GIT_SHALLOW    TRUE
     GIT_PROGRESS   TRUE
 )
@@ -31,6 +31,9 @@ juce_add_plugin(OndesMartinot
     FORMATS                 VST3 Standalone
     PRODUCT_NAME            "Ondes Martinot"
 )
+
+# Генерируем JuceHeader.h (нужен для #include <JuceHeader.h> в исходниках)
+juce_generate_juce_header(OndesMartinot)
 
 # ─── Sources ─────────────────────────────────────────────────────────────────
 target_sources(OndesMartinot

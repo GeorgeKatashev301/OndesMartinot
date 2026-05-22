@@ -1,13 +1,11 @@
 #include "PluginEditor.h"
 
 // =============================================================================
-//  OndesLookAndFeel
+//  LookAndFeel
 // =============================================================================
 OndesLookAndFeel::OndesLookAndFeel()
 {
-    using C = OndePalette;
-
-    // Слайдеры
+    namespace C = OndePalette;
     setColour (juce::Slider::rotarySliderFillColourId,    C::accent());
     setColour (juce::Slider::rotarySliderOutlineColourId, C::border());
     setColour (juce::Slider::thumbColourId,               C::accentHi());
@@ -16,155 +14,217 @@ OndesLookAndFeel::OndesLookAndFeel()
     setColour (juce::Slider::textBoxTextColourId,         C::textBri());
     setColour (juce::Slider::textBoxBackgroundColourId,   juce::Colour (0xff111111));
     setColour (juce::Slider::textBoxOutlineColourId,      juce::Colours::transparentBlack);
-
-    // Лейблы
-    setColour (juce::Label::textColourId, C::textBri());
+    setColour (juce::Label::textColourId,                 C::textBri());
 }
 
 void OndesLookAndFeel::drawRotarySlider (juce::Graphics& g,
-                                          int x, int y, int w, int h,
-                                          float sliderPos,
-                                          float startAngle, float endAngle,
-                                          juce::Slider&)
+    int x, int y, int w, int h,
+    float sliderPos, float startAngle, float endAngle, juce::Slider&)
 {
     using namespace juce;
-    const float cx     = x + w * 0.5f;
-    const float cy     = y + h * 0.5f;
-    const float radius = jmin (w, h) * 0.38f;
+    const float cx     = static_cast<float>(x) + static_cast<float>(w) * 0.5f;
+    const float cy     = static_cast<float>(y) + static_cast<float>(h) * 0.5f;
+    const float radius = jmin (static_cast<float>(w), static_cast<float>(h)) * 0.38f;
     const float angle  = startAngle + sliderPos * (endAngle - startAngle);
 
-    // ── Подложка ──────────────────────────────────────────────────────────────
     g.setColour (OndePalette::panel());
-    g.fillEllipse (cx - radius - 4, cy - radius - 4, (radius + 4) * 2, (radius + 4) * 2);
+    g.fillEllipse (cx-radius-4, cy-radius-4, (radius+4)*2, (radius+4)*2);
 
-    // ── Треклайн (пустой) ─────────────────────────────────────────────────────
-    Path trackPath;
-    trackPath.addCentredArc (cx, cy, radius, radius, 0.0f, startAngle, endAngle, true);
+    Path track; track.addCentredArc (cx, cy, radius, radius, 0, startAngle, endAngle, true);
     g.setColour (OndePalette::border());
-    g.strokePath (trackPath, PathStrokeType (3.0f, PathStrokeType::curved, PathStrokeType::rounded));
+    g.strokePath (track, PathStrokeType (3, PathStrokeType::curved, PathStrokeType::rounded));
 
-    // ── Треклайн (заполнение) ─────────────────────────────────────────────────
-    if (sliderPos > 0.0f)
+    if (sliderPos > 0)
     {
-        Path valuePath;
-        valuePath.addCentredArc (cx, cy, radius, radius, 0.0f, startAngle, angle, true);
+        Path val; val.addCentredArc (cx, cy, radius, radius, 0, startAngle, angle, true);
         g.setColour (OndePalette::accent());
-        g.strokePath (valuePath, PathStrokeType (3.0f, PathStrokeType::curved, PathStrokeType::rounded));
+        g.strokePath (val, PathStrokeType (3, PathStrokeType::curved, PathStrokeType::rounded));
     }
 
-    // ── Указатель ─────────────────────────────────────────────────────────────
     Path ptr;
-    ptr.addRectangle (-1.5f, -radius * 0.85f, 3.0f, radius * 0.45f);
+    ptr.addRectangle (-1.5f, -radius*0.85f, 3.0f, radius*0.45f);
     ptr.applyTransform (AffineTransform::rotation (angle).translated (cx, cy));
     g.setColour (OndePalette::accentHi());
     g.fillPath (ptr);
 
-    // ── Центральная точка ─────────────────────────────────────────────────────
     g.setColour (juce::Colour (0xff111111));
-    g.fillEllipse (cx - 4.5f, cy - 4.5f, 9.0f, 9.0f);
+    g.fillEllipse (cx-4.5f, cy-4.5f, 9, 9);
     g.setColour (OndePalette::border());
-    g.drawEllipse (cx - 4.5f, cy - 4.5f, 9.0f, 9.0f, 1.0f);
+    g.drawEllipse (cx-4.5f, cy-4.5f, 9, 9, 1);
 }
 
-void OndesLookAndFeel::drawToggleButton (juce::Graphics& g,
-                                          juce::ToggleButton& btn,
-                                          bool /*highlighted*/,
-                                          bool /*down*/)
+void OndesLookAndFeel::drawToggleButton (juce::Graphics& g, juce::ToggleButton& btn,
+    bool, bool)
 {
-    const bool on     = btn.getToggleState();
-    auto bounds = btn.getLocalBounds().toFloat().reduced (2.0f);
-
-    // Фон
+    const bool on = btn.getToggleState();
+    auto b = btn.getLocalBounds().toFloat().reduced (2);
     g.setColour (on ? OndePalette::accent() : OndePalette::panel());
-    g.fillRoundedRectangle (bounds, 10.0f);
-
-    // Рамка
+    g.fillRoundedRectangle (b, 8);
     g.setColour (on ? OndePalette::accentHi() : OndePalette::border());
-    g.drawRoundedRectangle (bounds.reduced (0.5f), 10.0f, 1.5f);
-
-    // Текст
-    g.setFont (juce::Font (juce::FontOptions().withHeight (13.0f)
-                                               .withStyle ("Bold")));
-    g.setColour (on ? juce::Colour (0xff111111) : OndePalette::textBri());
-    g.drawText (btn.getButtonText(), bounds, juce::Justification::centred);
+    g.drawRoundedRectangle (b.reduced(0.5f), 8, 1.5f);
+    g.setFont (juce::Font (juce::FontOptions().withHeight(13).withStyle("Bold")));
+    g.setColour (on ? juce::Colour(0xff111111) : OndePalette::textBri());
+    g.drawText (btn.getButtonText(), b, juce::Justification::centred);
 }
 
 juce::Label* OndesLookAndFeel::createSliderTextBox (juce::Slider& s)
 {
-    auto* label = LookAndFeel_V4::createSliderTextBox (s);
-    label->setFont (juce::Font (juce::FontOptions().withHeight (11.0f)));
-    return label;
+    auto* l = LookAndFeel_V4::createSliderTextBox (s);
+    l->setFont (juce::Font (juce::FontOptions().withHeight(11)));
+    return l;
 }
 
 // =============================================================================
-//  AmplitudeMeter
+//  Meter
 // =============================================================================
-AmplitudeMeter::AmplitudeMeter (OndesProcessor& p) : proc (p)
-{
-    startTimerHz (30);
-}
+AmplitudeMeter::AmplitudeMeter (OndesProcessor& p) : proc(p) { startTimerHz(30); }
 
 void AmplitudeMeter::paint (juce::Graphics& g)
 {
     auto b = getLocalBounds().toFloat();
+    const float amp = proc.displayAmplitude.load();
+    const float src = proc.displayModWheel.load();
 
-    const float amp  = proc.displayAmplitude.load();
-    const float mod  = proc.displayModWheel .load();
-
-    // Подложка
     g.setColour (OndePalette::panel());
-    g.fillRoundedRectangle (b, 5.0f);
-
-    // Слой: позиция колеса (слегка светлее, как «тень» амплитуды)
-    g.setColour (OndePalette::accent().withAlpha (0.25f));
-    g.fillRoundedRectangle (b.withWidth (b.getWidth() * mod), 5.0f);
-
-    // Слой: реальная амплитуда звука
+    g.fillRoundedRectangle (b, 5);
+    g.setColour (OndePalette::accent().withAlpha(0.22f));
+    g.fillRoundedRectangle (b.withWidth (b.getWidth() * src), 5);
     g.setColour (OndePalette::accent());
-    g.fillRoundedRectangle (b.withWidth (b.getWidth() * amp), 5.0f);
-
-    // Рамка
+    g.fillRoundedRectangle (b.withWidth (b.getWidth() * amp), 5);
     g.setColour (OndePalette::border());
-    g.drawRoundedRectangle (b.reduced (0.5f), 5.0f, 1.0f);
-
-    // Текст
+    g.drawRoundedRectangle (b.reduced(0.5f), 5, 1);
     g.setColour (OndePalette::textDim());
-    g.setFont (juce::Font (juce::FontOptions().withHeight (10.0f)));
+    g.setFont (juce::Font (juce::FontOptions().withHeight(10)));
     g.drawText ("OUTPUT", b, juce::Justification::centred);
+}
+
+// =============================================================================
+//  ThreeWaySwitch — физический вид тумблера: три позиции
+// =============================================================================
+ThreeWaySwitch::ThreeWaySwitch (OndesProcessor& p) : proc(p) { startTimerHz(20); }
+
+int ThreeWaySwitch::getMode() const
+{
+    return static_cast<int> (proc.apvts.getRawParameterValue ("bowMode")->load());
+}
+
+void ThreeWaySwitch::setMode (int m)
+{
+    if (auto* p = dynamic_cast<juce::AudioParameterChoice*> (proc.apvts.getParameter ("bowMode")))
+        p->setValueNotifyingHost (p->convertTo0to1 (m));
+}
+
+void ThreeWaySwitch::paint (juce::Graphics& g)
+{
+    const int mode  = getMode();
+    auto bounds     = getLocalBounds().toFloat();
+    const float W   = bounds.getWidth();
+    const float H   = bounds.getHeight();
+
+    // Тройка секций: HOLD | BOW | INSANE
+    struct Section { const char* label; juce::Colour activeCol; };
+    const Section secs[3] = {
+        { "HOLD",   OndePalette::accent() },
+        { "BOW",    OndePalette::accent() },
+        { "INSANE", OndePalette::insane() },
+    };
+
+    const float secW = W / 3.0f;
+
+    for (int i = 0; i < 3; ++i)
+    {
+        const bool active = (mode == i);
+        juce::Rectangle<float> sec (secW * i, 0, secW, H);
+
+        // Фон
+        g.setColour (active ? secs[i].activeCol : OndePalette::panel());
+        if (i == 0)
+            g.fillRoundedRectangle (sec, 8);
+        else if (i == 2)
+            g.fillRoundedRectangle (sec, 8);
+        else
+            g.fillRect (sec);
+
+        // Рамка
+        g.setColour (active ? secs[i].activeCol.brighter(0.3f) : OndePalette::border());
+        g.drawRect (sec, 1.0f);
+
+        // Метка
+        g.setFont (juce::Font (juce::FontOptions().withHeight(12).withStyle("Bold")));
+        g.setColour (active ? juce::Colour(0xff111111) : OndePalette::textDim());
+        g.drawText (secs[i].label, sec, juce::Justification::centred);
+    }
+
+    // Общая рамка поверх
+    g.setColour (OndePalette::border());
+    g.drawRoundedRectangle (bounds.reduced(0.5f), 8, 1.5f);
+}
+
+void ThreeWaySwitch::mouseDown (const juce::MouseEvent& e)
+{
+    const int section = static_cast<int> (e.x / (getWidth() / 3.0f));
+    setMode (juce::jlimit (0, 2, section));
 }
 
 // =============================================================================
 //  OndesEditor
 // =============================================================================
 OndesEditor::OndesEditor (OndesProcessor& p)
-    : AudioProcessorEditor (&p), proc (p), meter (p)
+    : AudioProcessorEditor(&p), proc(p), modeSwitch(p), meter(p)
 {
     setLookAndFeel (&laf);
     setSize (460, 300);
 
-    // HOLD кнопка
-    addAndMakeVisible (holdBtn);
-    holdAttach = std::make_unique<BtnAttach> (p.apvts, "holdMode", holdBtn);
+    addAndMakeVisible (modeSwitch);
 
     // Ноббы
-    setupKnob (ccMinSlider, ccMinLabel, "CC MIN",  0,   120,  1,    "ccMin");
-    setupKnob (ccMaxSlider, ccMaxLabel, "CC MAX",  7,   127,  1,    "ccMax");
-    setupKnob (glideSlider, glideLabel, "GLIDE",   0.0, 3.0,  0.01, "glideMax");
-    setupKnob (volumeSlider, volumeLabel, "VOLUME", 0.0, 1.0,  0.001,"volume");
+    setupKnob (ccMinSlider,   ccMinLabel,   "CC MIN",   0,    120,  1,    "ccMin");
+    setupKnob (ccMaxSlider,   ccMaxLabel,   "CC MAX",   7,    127,  1,    "ccMax");
+    setupKnob (glideSlider,   glideLabel,   "GLIDE",    0.0,  3.0,  0.01, "glideMax");
+    setupKnob (volumeSlider,  volumeLabel,  "VOLUME",   0.0,  1.0,  0.001,"volume");
+    setupKnob (bowSensSlider, bowSensLabel, "BOW SENS", 0.02, 0.8,  0.01, "bowSens");
+    setupKnob (releaseSlider, releaseLabel, "RELEASE",  0.0,  3.0,  0.01, "release");
 
-    // Метр
+    // Кнопки волны
+    auto* waveParam     = dynamic_cast<juce::AudioParameterChoice*> (p.apvts.getParameter ("waveform"));
+    const int waveGroup = 2001;
+
+    auto setupWaveBtn = [&] (juce::TextButton& btn, int idx)
+    {
+        btn.setRadioGroupId (waveGroup);
+        btn.setClickingTogglesState (true);
+        btn.setToggleState (waveParam && waveParam->getIndex() == idx, juce::dontSendNotification);
+        btn.setColour (juce::TextButton::buttonColourId,   OndePalette::panel());
+        btn.setColour (juce::TextButton::buttonOnColourId, OndePalette::accent());
+        btn.setColour (juce::TextButton::textColourOffId,  OndePalette::textDim());
+        btn.setColour (juce::TextButton::textColourOnId,   juce::Colour(0xff111111));
+        btn.onClick = [this, idx]
+        {
+            if (auto* wp = dynamic_cast<juce::AudioParameterChoice*> (proc.apvts.getParameter ("waveform")))
+                wp->setValueNotifyingHost (wp->convertTo0to1 (idx));
+        };
+        addAndMakeVisible (btn);
+    };
+
+    setupWaveBtn (waveSine,     0);
+    setupWaveBtn (waveSaw,      1);
+    setupWaveBtn (waveSquare,   2);
+    setupWaveBtn (waveTriangle, 3);
+
+    waveLabel.setText ("WAVE", juce::dontSendNotification);
+    waveLabel.setJustificationType (juce::Justification::centredLeft);
+    waveLabel.setFont (juce::Font (juce::FontOptions().withHeight(10)));
+    waveLabel.setColour (juce::Label::textColourId, OndePalette::textDim());
+    addAndMakeVisible (waveLabel);
+
     addAndMakeVisible (meter);
 }
 
-OndesEditor::~OndesEditor()
-{
-    setLookAndFeel (nullptr);
-}
+OndesEditor::~OndesEditor() { setLookAndFeel (nullptr); }
 
 void OndesEditor::setupKnob (juce::Slider& s, juce::Label& l,
-                               const juce::String& text,
-                               double lo, double hi, double step,
-                               const juce::String& paramId)
+    const juce::String& text, double lo, double hi, double step,
+    const juce::String& paramId)
 {
     s.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
     s.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 52, 16);
@@ -173,63 +233,56 @@ void OndesEditor::setupKnob (juce::Slider& s, juce::Label& l,
 
     l.setText (text, juce::dontSendNotification);
     l.setJustificationType (juce::Justification::centred);
-    l.setFont (juce::Font (juce::FontOptions().withHeight (10.5f)));
+    l.setFont (juce::Font (juce::FontOptions().withHeight(10.5f)));
     l.setColour (juce::Label::textColourId, OndePalette::textDim());
     addAndMakeVisible (l);
 
-    // Привязываем к APVTS
-    if      (paramId == "ccMin")    ccMinAttach  = std::make_unique<SldAttach> (proc.apvts, paramId, s);
-    else if (paramId == "ccMax")    ccMaxAttach  = std::make_unique<SldAttach> (proc.apvts, paramId, s);
-    else if (paramId == "glideMax") glideAttach  = std::make_unique<SldAttach> (proc.apvts, paramId, s);
-    else if (paramId == "volume")   volAttach    = std::make_unique<SldAttach> (proc.apvts, paramId, s);
+    if      (paramId == "ccMin")    ccMinAttach    = std::make_unique<SldAttach> (proc.apvts, paramId, s);
+    else if (paramId == "ccMax")    ccMaxAttach    = std::make_unique<SldAttach> (proc.apvts, paramId, s);
+    else if (paramId == "glideMax") glideAttach    = std::make_unique<SldAttach> (proc.apvts, paramId, s);
+    else if (paramId == "volume")   volAttach      = std::make_unique<SldAttach> (proc.apvts, paramId, s);
+    else if (paramId == "bowSens")  bowSensAttach  = std::make_unique<SldAttach> (proc.apvts, paramId, s);
+    else if (paramId == "release")  releaseAttach  = std::make_unique<SldAttach> (proc.apvts, paramId, s);
 }
 
 // ─── Paint ────────────────────────────────────────────────────────────────────
 void OndesEditor::paint (juce::Graphics& g)
 {
-    // Фон
+    const float W = static_cast<float> (getWidth());
+
     g.fillAll (OndePalette::bg());
 
     // Шапка
-    {
-        juce::Rectangle<float> header (0.0f, 0.0f, (float)getWidth(), 56.0f);
-        g.setColour (OndePalette::panel());
-        g.fillRect (header);
-        g.setColour (OndePalette::border());
-        g.drawHorizontalLine (56, 0, (float)getWidth());
+    g.setColour (OndePalette::panel());
+    g.fillRect (0, 0, getWidth(), 54);
+    g.setColour (OndePalette::border());
+    g.drawHorizontalLine (54, 0, W);
 
-        // Название
-        g.setFont (juce::Font (juce::FontOptions()
-                        .withName ("Georgia")
-                        .withHeight (22.0f)
-                        .withStyle ("Italic")));
-        g.setColour (OndePalette::accent());
-        g.drawText ("Ondes Martinot", 20, 10, 240, 28, juce::Justification::centredLeft);
+    g.setFont (juce::Font (juce::FontOptions().withName("Georgia").withHeight(21).withStyle("Italic")));
+    g.setColour (OndePalette::accent());
+    g.drawText ("Ondes Martinot", 20, 9, 260, 26, juce::Justification::centredLeft);
 
-        // Подзаголовок
-        g.setFont (juce::Font (juce::FontOptions().withHeight (10.0f)));
-        g.setColour (OndePalette::textDim());
-        g.drawText ("mod wheel  |  monophonic synthesizer", 20, 34, 280, 16,
-                    juce::Justification::centredLeft);
+    g.setFont (juce::Font (juce::FontOptions().withHeight(10)));
+    g.setColour (OndePalette::textDim());
+    g.drawText ("mod wheel synthesizer", 20, 33, 220, 14, juce::Justification::centredLeft);
+    g.drawText ("v0.3", static_cast<int>(W)-38, 36, 30, 12, juce::Justification::centredRight);
 
-        // Версия
-        g.drawText ("v0.1", getWidth() - 40, 38, 32, 12,
-                    juce::Justification::centredRight);
-    }
+    // Панель
+    g.setColour (OndePalette::panel());
+    g.fillRoundedRectangle (10, 62, W-20, 196, 6);
+    g.setColour (OndePalette::border());
+    g.drawRoundedRectangle (10, 62, W-20, 196, 6, 1);
 
-    // Панель элементов управления
-    {
-        juce::Rectangle<float> panel (10.0f, 66.0f, getWidth() - 20.0f, 158.0f);
-        g.setColour (OndePalette::panel());
-        g.fillRoundedRectangle (panel, 6.0f);
-        g.setColour (OndePalette::border());
-        g.drawRoundedRectangle (panel.reduced (0.5f), 6.0f, 1.0f);
-    }
+    // Разделитель между рядами
+    g.setColour (OndePalette::border());
+    g.drawHorizontalLine (118, 18, W-18);
 
     // Подписи секций
-    g.setFont (juce::Font (juce::FontOptions().withHeight (9.0f)));
+    g.setFont (juce::Font (juce::FontOptions().withHeight(9)));
     g.setColour (OndePalette::textDim());
-    g.drawText ("WHEEL RANGE", 130, 68, 160, 12, juce::Justification::centredLeft);
+    g.drawText ("MODE",       20,  64, 60,  11, juce::Justification::centredLeft);
+    g.drawText ("OSCILLATOR", 300, 64, 100, 11, juce::Justification::centredLeft);
+    g.drawText ("WHEEL RANGE + EXPRESSION", 20, 120, 240, 11, juce::Justification::centredLeft);
 }
 
 // ─── Layout ───────────────────────────────────────────────────────────────────
@@ -237,33 +290,50 @@ void OndesEditor::resized()
 {
     const int W = getWidth();
 
-    // HOLD — крупная кнопка слева
-    holdBtn.setBounds (20, 80, 92, 52);
-
-    // Ноббы — правее кнопки
-    const int knobW   = 76;
-    const int labelH  = 14;
-    const int knobH   = 72;
-    const int knobTop = 72;
-    const int gap     = 4;
-
-    int x = 124;
-
-    auto placeKnob = [&] (juce::Slider& s, juce::Label& l)
+    // ── Ряд 1 (y=77, h=32): тумблер слева | кнопки волны справа ─────────────
     {
-        l.setBounds (x, knobTop, knobW, labelH);
-        s.setBounds (x, knobTop + labelH, knobW, knobH);
-        x += knobW + gap;
-    };
+        // Тумблер HOLD/BOW/INSANE занимает 55% ширины строки
+        modeSwitch.setBounds (18, 77, 240, 32);
 
-    placeKnob (ccMinSlider, ccMinLabel);
-    placeKnob (ccMaxSlider, ccMaxLabel);
+        // Кнопки волны — оставшееся место
+        const int waveX   = 268;
+        const int waveEnd = W - 18;
+        const int waveW   = waveEnd - waveX;
+        const int gap     = 3;
+        const int btnW    = (waveW - gap * 3) / 4;
 
-    // Небольшой разделитель перед Glide/Volume
-    x += 6;
-    placeKnob (glideSlider, glideLabel);
-    placeKnob (volumeSlider, volumeLabel);
+        waveLabel.setBounds (waveX, 64, 80, 11);
+        waveSine    .setBounds (waveX,                    77, btnW, 32);
+        waveSaw     .setBounds (waveX + (btnW+gap),       77, btnW, 32);
+        waveSquare  .setBounds (waveX + (btnW+gap)*2,     77, btnW, 32);
+        waveTriangle.setBounds (waveX + (btnW+gap)*3,     77, btnW, 32);
+    }
 
-    // Метр — в нижней части
-    meter.setBounds (20, 240, W - 40, 22);
+    // ── Ряд 2 (y=131, h=86): ноббы, центрированные — 6 штук ─────────────────
+    {
+        const int knobW  = 66;
+        const int labelH = 14;
+        const int knobH  = 72;
+        const int knobY  = 131;
+        const int gap    = 5;
+        const int total  = knobW*6 + gap*5;
+        int x            = (W - total) / 2;
+
+        auto place = [&] (juce::Slider& s, juce::Label& l)
+        {
+            l.setBounds (x, knobY, knobW, labelH);
+            s.setBounds (x, knobY + labelH, knobW, knobH);
+            x += knobW + gap;
+        };
+
+        place (ccMinSlider,   ccMinLabel);
+        place (ccMaxSlider,   ccMaxLabel);
+        place (glideSlider,   glideLabel);
+        place (volumeSlider,  volumeLabel);
+        place (bowSensSlider, bowSensLabel);
+        place (releaseSlider, releaseLabel);
+    }
+
+    // ── Метр ─────────────────────────────────────────────────────────────────
+    meter.setBounds (20, 267, W-40, 22);
 }

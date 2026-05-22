@@ -2,16 +2,13 @@
 #include <JuceHeader.h>
 
 // =============================================================================
-//  OndesProcessor
+//  OndesProcessor  —  три режима управления амплитудой:
 //
-//  Цифровой синтезатор по мотивам Волн Мартено:
-//    • Колесо модуляции (CC1) напрямую управляет амплитудой — атака/рилиз
-//      определяются тем, КАК вы двигаете колесо, а не параметрами ADSR.
-//    • Hold ON  — нота живёт после отпускания клавиши; гасится колесом вниз.
-//    • Hold OFF — «смычковый» режим: нота звучит только пока клавиша зажата
-//                 И колесо поднято.
-//    • Монофонический глайд; скорость глайда = velocity следующей ноты.
-//    • Aftertouch → лёгкий детюн (вибрато ~5.5 Гц).
+//  HOLD   — позиция колеса = амплитуда; нота держится после отпускания клавиши.
+//  BOW    — амплитуда = скорость движения колеса (через тень-фильтр, плавно).
+//           Остановил руку → тишина. Чем быстрее — тем громче.
+//  INSANE — то же самое, но дельта считается по сырым MIDI-сообщениям.
+//           Хаотичные всплески, нестабильность — это фича.
 // =============================================================================
 class OndesProcessor : public juce::AudioProcessor
 {
@@ -19,77 +16,91 @@ public:
     OndesProcessor();
     ~OndesProcessor() override;
 
-    // ── Lifecycle ─────────────────────────────────────────────────────────────
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
     void releaseResources() override;
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
 
-    // ── Editor ────────────────────────────────────────────────────────────────
     juce::AudioProcessorEditor* createEditor() override;
     bool hasEditor() const override { return true; }
 
-    // ── Info ──────────────────────────────────────────────────────────────────
     const juce::String getName() const override { return "Ondes Martinot"; }
     bool   acceptsMidi()    const override { return true;  }
     bool   producesMidi()   const override { return false; }
     bool   isMidiEffect()   const override { return false; }
     double getTailLengthSeconds() const override { return 2.0; }
 
-    // ── Programs ──────────────────────────────────────────────────────────────
-    int  getNumPrograms()   override { return 1; }
+    int  getNumPrograms()    override { return 1; }
     int  getCurrentProgram() override { return 0; }
     void setCurrentProgram (int) override {}
     const juce::String getProgramName (int) override { return "Default"; }
     void changeProgramName (int, const juce::String&) override {}
 
-    // ── State ─────────────────────────────────────────────────────────────────
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 
-    // ── Parameters (APVTS) ────────────────────────────────────────────────────
     juce::AudioProcessorValueTreeState apvts;
 
-    // ── Thread-safe display values (читает UI) ────────────────────────────────
-    std::atomic<float> displayAmplitude { 0.0f };  // 0..1, текущая громкость
-    std::atomic<float> displayModWheel  { 0.0f };  // 0..1, позиция колеса
+    // Для UI (читается в таймере, 30 Гц)
+    std::atomic<float> displayAmplitude { 0.0f };
+    std::atomic<float> displayModWheel  { 0.0f };
+
+    // Режимы (соответствуют параметру "bowMode")
+    enum BowMode { Hold = 0, Bow = 1, Insane = 2 };
 
 private:
-    // ── Parameter layout ─────────────────────────────────────────────────────
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
-    // ── Synth voice state (только аудио-поток) ────────────────────────────────
-    int  currentNote  = -1;     // текущая MIDI-нота (-1 = нет)
-    bool keyIsHeld    = false;  // клавиша физически зажата
-    bool noteIsArmed  = false;  // нота «заряжена» (звуком управляет колесо)
+    // Голос
+    int  currentNote  = -1;
+    bool keyIsHeld    = false;
+    bool noteIsArmed  = false;
 
-    // Глайд (скользящая частота в пространстве полутонов)
-    double currentSemitone = 69.0;  // A4
+    // Глайд
+    double currentSemitone = 69.0;
     double targetSemitone  = 69.0;
-    double glideCoeff      = 1.0;   // 1.0 = мгновенно
+    double glideCoeff      = 1.0;
 
-    // Амплитуда со сглаживанием
-    double ampSmoothed     = 0.0;
-    double ampSmoothCoeff  = 0.99;  // вычисляется в prepareToPlay (~2 мс)
+    // Амплитуда
+    double ampSmoothed    = 0.0;
+    double ampSmoothCoeff = 0.99;
 
     // Осциллятор
-    double oscPhase        = 0.0;
+    double oscPhase = 0.0;
+    enum Waveform { Sine = 0, Sawtooth, Square, Triangle };
+    static double generateOscSample (double phase, int waveform) noexcept;
 
-    // Вибрато (LFO, питается от aftertouch)
-    double vibratoPhase    = 0.0;
-    static constexpr double VIBRATO_RATE_HZ  = 5.5;
-    static constexpr double VIBRATO_MAX_CENTS = 25.0;
-
-    // MIDI-состояние (сырые CC-значения, 0–127)
+    // MIDI
     float modWheelCC   = 0.0f;
     float aftertouchCC = 0.0f;
 
+    // ── BOW (плавный) ─────────────────────────────────────────────────────────
+    // shadowCC = LPF(modWheelCC, τ=25мс); разница = скорость движения.
+    // bowSpeedOut = дополнительный LPF на выходе (τ=15мс) — убирает CC-спайки.
+    float  shadowCC         = 0.0f;
+    float  bowSpeedOut      = 0.0f;  // сглаженный выходной bow speed
+    double shadowCoeff      = 0.999;
+    double bowOutCoeff      = 0.999; // τ≈15мс, считается в prepareToPlay
+    static constexpr float BOW_SMOOTH_SENSITIVITY = 0.25f;
+
+    // Счётчик "тишины" по CC: сколько сэмплов прошло с последнего CC-сообщения.
+    // Если > порога (≈100мс) → рука только что коснулась колеса → снапим тень.
+    int ccSilenceCounter   = 0;
+    int ccSilenceThreshold = 4410; // пересчитывается в prepareToPlay
+
+    // ── INSANE (сырые дельты) ─────────────────────────────────────────────────
+    // Фикс: дельта = |newCC - modWheelCC| (modWheelCC = предыдущее значение).
+    // prevModWheelCC убран — modWheelCC сам является «предыдущим» до обновления.
+    float  insaneBowSpeed   = 0.0f;
+    double insaneDecayCoeff = 0.999;
+    static constexpr float INSANE_SENSITIVITY = 0.5f; // повышена: delta=2 → 100%
+
+    // Aftertouch → прямой детюн
+    static constexpr double AFTERTOUCH_MAX_CENTS = 40.0;
+
     double sampleRate_ = 44100.0;
 
-    // ── Вспомогательные функции ───────────────────────────────────────────────
-    void   processMidiEvent (const juce::MidiMessage& msg,
-                             bool holdMode, float ccMin, float ccMax,
-                             float maxGlide);
-    double getTargetAmplitude (bool holdMode, float ccMin, float ccMax) const;
+    void processMidiEvent (const juce::MidiMessage& msg,
+                           int bowMode, float ccMin, float ccMax, float maxGlide);
 
     static double midiNoteToHz (double note) noexcept
     {
