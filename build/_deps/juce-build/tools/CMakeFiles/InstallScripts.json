@@ -1,0 +1,10 @@
+{
+	"InstallScripts" : 
+	[
+		"/Users/george/Documents/My Apps/OndesMartinot/build/_deps/juce-build/tools/cmake_install.cmake",
+		"/Users/george/Documents/My Apps/OndesMartinot/build/_deps/juce-build/tools/modules/cmake_install.cmake",
+		"/Users/george/Documents/My Apps/OndesMartinot/build/_deps/juce-build/tools/extras/Build/cmake_install.cmake",
+		"/Users/george/Documents/My Apps/OndesMartinot/build/_deps/juce-build/tools/extras/Build/juceaide/cmake_install.cmake"
+	],
+	"Parallel" : false
+}
