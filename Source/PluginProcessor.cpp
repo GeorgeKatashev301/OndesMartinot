@@ -47,6 +47,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout OndesProcessor::createParame
         "release", "Release",
         juce::NormalisableRange<float> (0.0f, 3.0f, 0.01f), 0.0f));
 
+    params.push_back (std::make_unique<juce::AudioParameterFloat> (
+        "warmth", "Warmth",
+        juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.3f));
+
     return { params.begin(), params.end() };
 }
 
@@ -73,10 +77,11 @@ void OndesProcessor::prepareToPlay (double sampleRate, int)
 
     // Сброс
     currentNote    = -1;    keyIsHeld   = false;  noteIsArmed = false;
-    ampSmoothed    = 0.0;   oscPhase    = 0.0;
+    ampSmoothed    = 0.0;   oscPhase    = 0.0;    prevRawOsc  = 0.0;
     modWheelCC     = 0.0f;  aftertouchCC   = 0.0f;
     shadowCC       = 0.0f;  bowSpeedOut    = 0.0f;  insaneBowSpeed = 0.0f;
     currentSemitone = 69.0; targetSemitone = 69.0;  glideCoeff = 1.0;
+    dcX1 = 0.0; dcY1 = 0.0;
 }
 
 void OndesProcessor::releaseResources() {}
@@ -183,6 +188,7 @@ void OndesProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     const int   waveform = static_cast<int> (apvts.getRawParameterValue ("waveform")->load());
     const float bowSens     = apvts.getRawParameterValue ("bowSens")->load();
     const float releaseTime = apvts.getRawParameterValue ("release")->load();
+    const float warmth      = apvts.getRawParameterValue ("warmth")->load();
 
     // Release-коэффициент для Bow/Insane: считается раз на блок, не per-sample
     const double relCoeff = (releaseTime > 0.005f)
@@ -279,14 +285,32 @@ void OndesProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         // ── Aftertouch → прямой детюн ─────────────────────────────────────────
         freq *= std::pow (2.0, (aftertouchCC / 127.0) * AFTERTOUCH_MAX_CENTS / 1200.0);
 
-        // ── Осциллятор ────────────────────────────────────────────────────────
-        const double sample = generateOscSample (oscPhase, waveform)
-                              * ampSmoothed
-                              * static_cast<double> (volume);
+        // ── Осциллятор (polyBLEP) ─────────────────────────────────────────────
+        const double dt        = freq / sampleRate_;
+        const double rawSample = generateOscSample (oscPhase, waveform, dt);
 
-        oscPhase += juce::MathConstants<double>::twoPi * freq / sampleRate_;
+        oscPhase += juce::MathConstants<double>::twoPi * dt;
         if (oscPhase >= juce::MathConstants<double>::twoPi)
             oscPhase -= juce::MathConstants<double>::twoPi;
+
+        // ── Сатурация с 2× оверсэмплингом ────────────────────────────────────
+        // Линейная интерполяция между предыдущим и текущим семплом даёт
+        // промежуточную точку; оба прогоняются через нелинейность и усредняются.
+        // Это поднимает эффективный SR вдвое для стадии насыщения → нет алиасинга
+        // от нелинейности.
+        const double midSample  = (prevRawOsc + rawSample) * 0.5;
+        const double w          = static_cast<double> (warmth);
+        const double saturated  = (tubeSaturate (midSample, w) + tubeSaturate (rawSample, w)) * 0.5;
+        prevRawOsc = rawSample;
+
+        // ── DC-блокер ─────────────────────────────────────────────────────────
+        // Убирает постоянный сдвиг, который вносит асимметричная сатурация.
+        // y[n] = x[n] - x[n-1] + R * y[n-1]
+        const double dcBlocked = saturated - dcX1 + DC_BLOCKER_R * dcY1;
+        dcX1 = saturated;
+        dcY1 = dcBlocked;
+
+        const double sample = dcBlocked * ampSmoothed * static_cast<double> (volume);
 
         leftCh[i] = static_cast<float> (sample);
         if (rightCh) rightCh[i] = leftCh[i];
@@ -306,18 +330,83 @@ void OndesProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     displayModWheel.store (dispSrc);
 }
 
-// ─── Waveform ─────────────────────────────────────────────────────────────────
-double OndesProcessor::generateOscSample (double phase, int waveform) noexcept
+// ─── PolyBLEP ─────────────────────────────────────────────────────────────────
+// Сглаживает разрыв наивного осциллятора полиномиальной коррекцией.
+// t  = phase / (2π) ∈ [0, 1)
+// dt = freq / sampleRate — ширина окна коррекции
+double OndesProcessor::polyBlep (double t, double dt) noexcept
 {
-    const double pi = juce::MathConstants<double>::pi;
+    if (t < dt)
+    {
+        t /= dt;
+        return t + t - t * t - 1.0;
+    }
+    if (t > 1.0 - dt)
+    {
+        t = (t - 1.0) / dt;
+        return t * t + t + t + 1.0;
+    }
+    return 0.0;
+}
+
+// ─── Waveform ─────────────────────────────────────────────────────────────────
+double OndesProcessor::generateOscSample (double phase, int waveform, double dt) noexcept
+{
+    const double pi    = juce::MathConstants<double>::pi;
+    const double twoPi = juce::MathConstants<double>::twoPi;
+    const double t     = phase / twoPi;   // нормированная фаза [0, 1)
+
     switch (waveform)
     {
-        case Sine:     return std::sin (phase);
-        case Sawtooth: return 1.0 - (phase / pi);
-        case Square:   return phase < pi ? 1.0 : -1.0;
-        case Triangle: return (2.0 / pi) * std::asin (std::sin (phase));
-        default:       return std::sin (phase);
+        case Sine:
+            return std::sin (phase);   // синус без разрывов — polyBLEP не нужен
+
+        case Sawtooth:
+        {
+            // Наивная пила [-1, +1] с разрывом в t=0
+            double saw = 2.0 * t - 1.0;
+            saw -= polyBlep (t, dt);   // сглаживаем разрыв
+            return saw;
+        }
+
+        case Square:
+        {
+            // Наивный квадрат с разрывами в t=0 и t=0.5
+            double sq = (phase < pi) ? 1.0 : -1.0;
+            sq += polyBlep (t, dt);                           // разрыв при t=0
+            sq -= polyBlep (std::fmod (t + 0.5, 1.0), dt);   // разрыв при t=0.5
+            return sq;
+        }
+
+        case Triangle:
+            // asin(sin) — уже гладкий, разрывов нет
+            return (2.0 / pi) * std::asin (std::sin (phase));
+
+        default:
+            return std::sin (phase);
     }
+}
+
+// ─── Tube Saturation ──────────────────────────────────────────────────────────
+// Асимметричный вейвшейпер на базе tanh.
+// Положительная полуволна сжимается сильнее отрицательной → акцент н�� 2-й гармонике,
+// характерный для триодных ламп.
+// warmth=0 → чистый сигнал.  warmth=1 → насыщенное ламповое звучание.
+double OndesProcessor::tubeSaturate (double x, double warmth) noexcept
+{
+    if (warmth < 0.001) return x;
+
+    // Положительная полуволна — более сильный драйв (анодное насыщение триода)
+    // Отрицательная — чуть мягче: это создаёт 2-ю гармонику
+    const double drivePos = 1.0 + warmth * 4.0;   // 1 → 5
+    const double driveNeg = 1.0 + warmth * 2.5;   // 1 → 3.5
+
+    const double driven = x >= 0.0
+        ? std::tanh (x * drivePos) / drivePos
+        : std::tanh (x * driveNeg) / driveNeg;
+
+    // Плавный переход: при warmth=0 — dry, при warmth=1 — полностью wet
+    return x + warmth * (driven - x);
 }
 
 // ─── State ────────────────────────────────────────────────────────────────────

@@ -65,9 +65,22 @@ private:
     double ampSmoothCoeff = 0.99;
 
     // Осциллятор
-    double oscPhase = 0.0;
+    double oscPhase    = 0.0;
+    double prevRawOsc  = 0.0;   // предыдущий raw-семпл (для 2× oversampling сатурации)
     enum Waveform { Sine = 0, Sawtooth, Square, Triangle };
-    static double generateOscSample (double phase, int waveform) noexcept;
+
+    // dt = freq / sampleRate — нужен для polyBLEP-коррекции разрывов
+    static double generateOscSample (double phase, int waveform, double dt) noexcept;
+
+    // PolyBLEP: сглаживает разрывы в точке t (фаза / 2π), dt = freq/sampleRate
+    static double polyBlep (double t, double dt) noexcept;
+
+    // Ламповое насыщение: асимметричный вейвшейпер, акцент на 2-й гармонике
+    static double tubeSaturate (double x, double warmth) noexcept;
+
+    // DC-блокер (убирает постоянный сдвиг от асимметричной сатурации)
+    double dcX1 = 0.0, dcY1 = 0.0;
+    static constexpr double DC_BLOCKER_R = 0.9999;
 
     // MIDI
     float modWheelCC   = 0.0f;

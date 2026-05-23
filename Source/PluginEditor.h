@@ -71,8 +71,13 @@ private:
 
     ThreeWaySwitch modeSwitch;
 
+    // Expression controls
     juce::Slider ccMinSlider, ccMaxSlider, glideSlider, volumeSlider, bowSensSlider, releaseSlider;
     juce::Label  ccMinLabel,  ccMaxLabel,  glideLabel,  volumeLabel,  bowSensLabel,  releaseLabel;
+
+    // Sound controls
+    juce::Slider warmthSlider;
+    juce::Label  warmthLabel;
 
     juce::TextButton waveSine { "SIN" }, waveSaw { "SAW" },
                      waveSquare { "SQR" }, waveTriangle { "TRI" };
@@ -81,7 +86,8 @@ private:
     AmplitudeMeter meter;
 
     using SldAttach = juce::AudioProcessorValueTreeState::SliderAttachment;
-    std::unique_ptr<SldAttach> ccMinAttach, ccMaxAttach, glideAttach, volAttach, bowSensAttach, releaseAttach;
+    std::unique_ptr<SldAttach> ccMinAttach, ccMaxAttach, glideAttach, volAttach,
+                               bowSensAttach, releaseAttach, warmthAttach;
 
     void setupKnob (juce::Slider& s, juce::Label& l, const juce::String& text,
                     double lo, double hi, double step, const juce::String& paramId);

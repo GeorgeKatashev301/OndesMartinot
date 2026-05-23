@@ -173,7 +173,7 @@ OndesEditor::OndesEditor (OndesProcessor& p)
     : AudioProcessorEditor(&p), proc(p), modeSwitch(p), meter(p)
 {
     setLookAndFeel (&laf);
-    setSize (460, 300);
+    setSize (460, 350);
 
     addAndMakeVisible (modeSwitch);
 
@@ -184,6 +184,9 @@ OndesEditor::OndesEditor (OndesProcessor& p)
     setupKnob (volumeSlider,  volumeLabel,  "VOLUME",   0.0,  1.0,  0.001,"volume");
     setupKnob (bowSensSlider, bowSensLabel, "BOW SENS", 0.02, 0.8,  0.01, "bowSens");
     setupKnob (releaseSlider, releaseLabel, "RELEASE",  0.0,  3.0,  0.01, "release");
+
+    // Звук
+    setupKnob (warmthSlider, warmthLabel, "WARMTH", 0.0, 1.0, 0.01, "warmth");
 
     // Кнопки волны
     auto* waveParam     = dynamic_cast<juce::AudioParameterChoice*> (p.apvts.getParameter ("waveform"));
@@ -243,6 +246,7 @@ void OndesEditor::setupKnob (juce::Slider& s, juce::Label& l,
     else if (paramId == "volume")   volAttach      = std::make_unique<SldAttach> (proc.apvts, paramId, s);
     else if (paramId == "bowSens")  bowSensAttach  = std::make_unique<SldAttach> (proc.apvts, paramId, s);
     else if (paramId == "release")  releaseAttach  = std::make_unique<SldAttach> (proc.apvts, paramId, s);
+    else if (paramId == "warmth")   warmthAttach   = std::make_unique<SldAttach> (proc.apvts, paramId, s);
 }
 
 // ─── Paint ────────────────────────────────────────────────────────────────────
@@ -265,24 +269,28 @@ void OndesEditor::paint (juce::Graphics& g)
     g.setFont (juce::Font (juce::FontOptions().withHeight(10)));
     g.setColour (OndePalette::textDim());
     g.drawText ("mod wheel synthesizer", 20, 33, 220, 14, juce::Justification::centredLeft);
-    g.drawText ("v0.3", static_cast<int>(W)-38, 36, 30, 12, juce::Justification::centredRight);
+    g.drawText ("v0.5", static_cast<int>(W)-38, 36, 30, 12, juce::Justification::centredRight);
 
-    // Панель
+    // Панель (расширена для второго ряда нобов)
     g.setColour (OndePalette::panel());
-    g.fillRoundedRectangle (10, 62, W-20, 196, 6);
+    g.fillRoundedRectangle (10, 62, W-20, 246, 6);
     g.setColour (OndePalette::border());
-    g.drawRoundedRectangle (10, 62, W-20, 196, 6, 1);
+    g.drawRoundedRectangle (10, 62, W-20, 246, 6, 1);
 
-    // Разделитель между рядами
+    // Разделитель 1: между MODE/WAVE и ��ервым рядом нобов
     g.setColour (OndePalette::border());
     g.drawHorizontalLine (118, 18, W-18);
+
+    // Разделитель 2: между рядами нобов
+    g.drawHorizontalLine (218, 18, W-18);
 
     // Подписи секций
     g.setFont (juce::Font (juce::FontOptions().withHeight(9)));
     g.setColour (OndePalette::textDim());
-    g.drawText ("MODE",       20,  64, 60,  11, juce::Justification::centredLeft);
-    g.drawText ("OSCILLATOR", 300, 64, 100, 11, juce::Justification::centredLeft);
-    g.drawText ("WHEEL RANGE + EXPRESSION", 20, 120, 240, 11, juce::Justification::centredLeft);
+    g.drawText ("MODE",                       20,  64, 60,  11, juce::Justification::centredLeft);
+    g.drawText ("OSCILLATOR",                300,  64, 100, 11, juce::Justification::centredLeft);
+    g.drawText ("WHEEL RANGE + EXPRESSION",   20, 120, 240, 11, juce::Justification::centredLeft);
+    g.drawText ("SOUND",                      20, 220, 100, 11, juce::Justification::centredLeft);
 }
 
 // ─── Layout ───────────────────────────────────────────────────────────────────
@@ -334,6 +342,17 @@ void OndesEditor::resized()
         place (releaseSlider, releaseLabel);
     }
 
+    // ── Ряд 3 (y=231, h=86): звуковые параметры ──────────────────────────────
+    {
+        const int knobW  = 76;
+        const int labelH = 14;
+        const int knobH  = 72;
+        const int knobY  = 231;
+
+        warmthLabel .setBounds ((W - knobW) / 2, knobY, knobW, labelH);
+        warmthSlider.setBounds ((W - knobW) / 2, knobY + labelH, knobW, knobH);
+    }
+
     // ── Метр ─────────────────────────────────────────────────────────────────
-    meter.setBounds (20, 267, W-40, 22);
+    meter.setBounds (20, 317, W-40, 22);
 }
