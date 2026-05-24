@@ -186,7 +186,7 @@ OndesEditor::OndesEditor (OndesProcessor& p)
     setupKnob (releaseSlider, releaseLabel, "RELEASE",  0.0,  3.0,  0.01, "release");
 
     // Звук
-    setupKnob (warmthSlider, warmthLabel, "WARMTH", 0.0, 1.0, 0.01, "warmth");
+    setupKnob (warmthSlider, warmthLabel, "TAPE", 0.0, 1.0, 0.01, "warmth");
 
     // Кнопки волны
     auto* waveParam     = dynamic_cast<juce::AudioParameterChoice*> (p.apvts.getParameter ("waveform"));
@@ -269,7 +269,7 @@ void OndesEditor::paint (juce::Graphics& g)
     g.setFont (juce::Font (juce::FontOptions().withHeight(10)));
     g.setColour (OndePalette::textDim());
     g.drawText ("mod wheel synthesizer", 20, 33, 220, 14, juce::Justification::centredLeft);
-    g.drawText ("v0.5", static_cast<int>(W)-38, 36, 30, 12, juce::Justification::centredRight);
+    g.drawText ("v0.6", static_cast<int>(W)-38, 36, 30, 12, juce::Justification::centredRight);
 
     // Панель (расширена для второго ряда нобов)
     g.setColour (OndePalette::panel());
